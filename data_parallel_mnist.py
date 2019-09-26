@@ -11,6 +11,7 @@ from chainer.training import extensions
 
 import chainermn
 
+import random
 
 class MLP(chainer.Chain):
 
