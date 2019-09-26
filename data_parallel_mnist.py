@@ -11,6 +11,8 @@ from chainer.training import extensions
 
 import chainermn
 
+test testbranch
+
 class MLP(chainer.Chain):
 
     def __init__(self, n_units, n_out):
