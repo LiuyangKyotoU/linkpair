@@ -31,9 +31,10 @@ def construct_atom_feature_matrix(mol, whether_rich=True):
                             [a.GetIsAromatic()] for a in mol.GetAtoms()]
     atom_simple_features = np.array(atom_simple_features, dtype=np.float32)
 
-    if whether_rich:
+    if not whether_rich:
         return atom_simple_features
 
+    assign_atomic_rich_Properties(mol)
     atom_rich_features = [
         [a.GetIsAromatic() == False and any([neighbor.GetIsAromatic() for neighbor in a.GetNeighbors()])] + \
         [a.IsInRing()] + \
@@ -85,6 +86,11 @@ def construct_discrete_edge_matrix(mol):
 
 def construct_supdernode_feature_array(mol, atom_array, adj):
     return chainer_chemistry.dataset.preprocessors.common.construct_supernode_feature(mol, atom_array, adj)
+
+
+def construct_label(mol, actions):
+    pass
+
 
 
 if __name__ == '__main__':
