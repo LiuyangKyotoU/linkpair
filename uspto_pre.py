@@ -51,7 +51,7 @@ def pre_data(ind, reaction, label_type, whether_rich=True):
 
     assert label is not None
 
-    return atom_feature, adjs, supernode_feature, label
+    return atom_feature, adjs, supernode_feature, label, ind
 
 
 class USPTO_pre(chainer.dataset.DatasetMixin):
