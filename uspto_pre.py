@@ -4,7 +4,8 @@ from rdkit import Chem
 import numpy as np
 
 from preprocessor import construct_atomic_number_array, \
-    construct_atom_feature_matrix, construct_discrete_edge_matrix, construct_supdernode_feature_array
+    construct_atom_feature_matrix, construct_discrete_edge_matrix, construct_supdernode_feature_array, \
+    construct_sigmoid_label, construct_softmax_label
 
 
 def read_data(path):
@@ -19,7 +20,7 @@ def read_data(path):
     return data
 
 
-def pre_data(reaction, ind, whether_rich=True):
+def pre_data(ind, reaction, label_type, whether_rich=True):
     '''
     :param reaction: [CH3:14][NH2:15].[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[Cl:13].[OH2:16]>>[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[NH:15][CH3:14] 12-13-0.0;12-15-1.0
 
@@ -42,12 +43,22 @@ def pre_data(reaction, ind, whether_rich=True):
     adjs = construct_discrete_edge_matrix(mol)
     supernode_feature = construct_supdernode_feature_array(mol, atom_array, adjs)
 
-    return atom_feature, adjs, supernode_feature
+    label = None
+    if label_type == 'sigmoid':
+        label = construct_sigmoid_label(mol, adjs, actions)
+    elif label_type == 'softmax':
+        label = construct_softmax_label(mol, adjs, actions)
+
+    assert label is not None
+
+    return atom_feature, adjs, supernode_feature, label
 
 
 class USPTO_pre(chainer.dataset.DatasetMixin):
-    def __init__(self, reaction_list):
+    def __init__(self, reaction_list, label_type):
         self.reaction_list = reaction_list
+        self.label_type = label_type
+
         self.pre_list = [None for _ in range(len(self.reaction_list))]
 
     def __len__(self):
@@ -55,13 +66,11 @@ class USPTO_pre(chainer.dataset.DatasetMixin):
 
     def get_example(self, i):
         if self.pre_list[i] is None:
-            self.pre_list[i] = pre_data(self.reaction_list[i], i)
+            self.pre_list[i] = pre_data(i, self.reaction_list[i], self.label_type)
         return self.pre_list[i]
 
 
 if __name__ == '__main__':
-
     data_raw = read_data('../train.txt.proc')
-    USPTO_pre = USPTO_pre(data_raw)
+    USPTO_pre = USPTO_pre(data_raw, 'softmax')
     sample = USPTO_pre[1]
-

@@ -88,11 +88,72 @@ def construct_supdernode_feature_array(mol, atom_array, adj):
     return chainer_chemistry.dataset.preprocessors.common.construct_supernode_feature(mol, atom_array, adj)
 
 
-def construct_label(mol, actions):
-    pass
+def constrcut_atom_MapNum_Num_list(mol):
+    size = mol.GetNumAtoms()
+    MapNum_Num = {x + 1: None for x in range(size)}
+    for i in range(size):
+        MapNum_Num[mol.GetAtomWithIdx(i).GetAtomMapNum()] = i
+    return MapNum_Num
 
+
+def construct_sigmoid_label(mol, adjs, actions):
+    '''
+    - reactants: [CH3:14][NH2:15].[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[Cl:13].[OH2:16]
+    :param mol:
+    :param actions: 12-13-0.0;12-15-1.0
+    :return: 5(none, single, double, triple, aromatic) + 2(keep, change), Note !! : use 2 mlp but cal only 1 sigmoid loss!
+    '''
+
+    d = constrcut_atom_MapNum_Num_list(mol)
+    size = mol.GetNumAtoms()
+    p_label = np.zeros((7, size, size)).astype(np.float32)
+    p_label[0, :, :] = 1 - adjs.sum(axis=0)
+    p_label[1:5, :, :] = adjs[:4, :, :]
+    p_label[5, :, :] = 1.0
+
+    for a in actions.split(';'):
+        tmp = a.split('-')
+        i = d[int(tmp[0])]
+        j = d[int(tmp[1])]
+        l = int(float(tmp[2]))
+        p_label[:, i, j] = 0.0
+        p_label[:, j, i] = 0.0
+        p_label[6, i, j] = 1.0
+        p_label[6, j, i] = 1.0
+        p_label[l, i, j] = 1.0
+        p_label[l, j, i] = 1.0
+    return p_label
+
+
+def construct_softmax_label(mol, adjs, actions):
+    '''
+    - reactants: [CH3:14][NH2:15].[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[Cl:13].[OH2:16]
+    :param mol:
+    :param actions: 12-13-0.0;12-15-1.0
+    :return: 1(none/single/double/triple/aromatic), 1(keep/change), Note !! : use 2 mlp but cal 2 softmax losses!
+    '''
+    d = constrcut_atom_MapNum_Num_list(mol)
+    size = mol.GetNumAtoms()
+    s_label = np.zeros((2, size, size)).astype(np.int32)
+    bond_type_to_channel_2 = {
+        Chem.BondType.SINGLE: 1,
+        Chem.BondType.DOUBLE: 2,
+        Chem.BondType.TRIPLE: 3,
+        Chem.BondType.AROMATIC: 4
+    }
+    for bond in mol.GetBonds():
+        bond_type = bond.GetBondType()
+        ch = bond_type_to_channel_2[bond_type]
+        i = bond.GetBeginAtomIdx()
+        j = bond.GetEndAtomIdx()
+
+        s_label[0, i, j] = ch
+        s_label[0, j, i] = ch
+        s_label[1, i, j] = 1
+        s_label[1, j, i] = 1
+    return s_label
 
 
 if __name__ == '__main__':
-    s = '[CH2:1]([CH3:2])[n:3]1[cH:4][c:5]([C:22](=[O:23])[OH:24])[c:6](=[O:21])[c:7]2[cH:8][c:9]([F:20])[c:10](-[c:13]3[cH:14][cH:15][c:16]([NH2:19])[cH:17][cH:18]3)[cH:11][c:12]12.[CH:25](=[O:26])[OH:27]'
+    s = '[CH3:14][NH2:15].[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[Cl:13].[OH2:16]'
     m = Chem.MolFromSmiles(s)
