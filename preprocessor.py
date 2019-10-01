@@ -96,6 +96,7 @@ def constrcut_atom_MapNum_Num_list(mol):
     return MapNum_Num
 
 
+# TODO: 好像不对
 def construct_sigmoid_label(mol, adjs, actions):
     '''
     - reactants: [CH3:14][NH2:15].[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[Cl:13].[OH2:16]
@@ -107,7 +108,7 @@ def construct_sigmoid_label(mol, adjs, actions):
     d = constrcut_atom_MapNum_Num_list(mol)
     size = mol.GetNumAtoms()
     p_label = np.zeros((7, size, size)).astype(np.float32)
-    p_label[0, :, :] = 1 - adjs.sum(axis=0)
+    p_label[0, :, :] = 1 - adjs[:4, :, :].sum(axis=0)
     p_label[1:5, :, :] = adjs[:4, :, :]
     p_label[5, :, :] = 1.0
 
@@ -149,8 +150,19 @@ def construct_softmax_label(mol, adjs, actions):
 
         s_label[0, i, j] = ch
         s_label[0, j, i] = ch
+
+    for a in actions.split(';'):
+        tmp = a.split('-')
+        i = d[int(tmp[0])]
+        j = d[int(tmp[1])]
+        l = int(float(tmp[2]))
+        assert s_label[0, i, j] != l
+        assert s_label[0, j, i] != l
+        s_label[0, i, j] = l
+        s_label[0, j, i] = l
         s_label[1, i, j] = 1
         s_label[1, j, i] = 1
+
     return s_label
 
 

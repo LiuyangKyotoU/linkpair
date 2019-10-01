@@ -13,6 +13,7 @@ from distutils.util import strtobool
 
 from model import pair_matrix_model
 import uspto_pre
+from updater import MyUpdater
 
 
 def main():
@@ -58,14 +59,15 @@ def main():
         print('Num epoch: {}'.format(args.epoch))
         print('==========================================')
 
-    model = pair_matrix_model(label_type=args.label_type, gnn_dim=args.gnn_dim,
-                              n_layers=args.n_layers, nn_dim=args.nn_dim)
+    model = pair_matrix_model(label_type=args.label_type,
+                              gnn_dim=args.gnn_dim, n_layers=args.n_layers, nn_dim=args.nn_dim)
     if device > 0:
         chainer.cuda.get_device_from_id(device).use()
         model.to_gpu()
 
     optimizer = chainermn.create_multi_node_optimizer(
         chainer.optimizers.Adam(alpha=args.lr), comm)
+    optimizer.setup(model)
 
     train_raw = uspto_pre.read_data(args.train_path)
     valid_raw = uspto_pre.read_data(args.valid_path)
@@ -86,9 +88,11 @@ def main():
     train_iter = SerialIterator(train_dataset, args.batch_size)
     valid_iter = SerialIterator(valid_dataset, args.batch_size, repeat=False, shuffle=False)
 
-    updater = StandardUpdater(train_iter, optimizer, device=device, converter=concat_mols(padding=-1))
+    updater = MyUpdater(models=model, iterator=train_iter,
+                        optimizer=optimizer, device=device, converter=concat_mols)
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
-    trainer.extend(extensions.Evaluator(valid_iter, model, device=device, converter=concat_mols(padding=-1)))
+    # TODO: MyEvaluator
+    trainer.extend(extensions.Evaluator(valid_iter, model, device=device, converter=concat_mols))
 
     trainer.extend(extensions.observe_value('alpha', lambda t: optimizer.alpha))
     trainer.extend(extensions.ExponentialShift('alpha', 0.9, optimizer=optimizer),
@@ -102,7 +106,7 @@ def main():
         trainer.extend(extensions.LogReport())
 
         trainer.extend(extensions.PrintReport(
-            ['epoch',
+            ['epoch', 'alpha',
              'main/loss', 'validation/main/loss',
              'main/acc', 'validation/main/acc',
              'elapsed_time']

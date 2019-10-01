@@ -72,5 +72,5 @@ class USPTO_pre(chainer.dataset.DatasetMixin):
 
 if __name__ == '__main__':
     data_raw = read_data('../train.txt.proc')
-    USPTO_pre = USPTO_pre(data_raw, 'softmax')
+    USPTO_pre = USPTO_pre(data_raw, 'sigmoid')
     sample = USPTO_pre[1]
