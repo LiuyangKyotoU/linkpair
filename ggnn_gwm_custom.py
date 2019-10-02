@@ -51,3 +51,19 @@ class ggnn_gwm(chainer.Chain):
             [update_layer.reset_state() for update_layer in self.update_layers]
 
         self.gwm.reset_state()
+
+
+if __name__ == '__main__':
+    import uspto_pre
+    from chainer.iterators import SerialIterator
+    from chainer_chemistry.dataset.converters import concat_mols
+
+    train_raw = uspto_pre.read_data('../train.txt.proc')
+    train_dataset = uspto_pre.USPTO_pre(train_raw[:100], 'softmax')
+    train_iter = SerialIterator(train_dataset, 3)
+
+    model = ggnn_gwm()
+
+    for b in train_iter:
+        atom_feature, adjs, supernode_feature, label, ind = concat_mols(b, padding=-1)
+        print(model(atom_feature, adjs, supernode_feature))

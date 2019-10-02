@@ -8,21 +8,6 @@ def construct_atomic_number_array(mol):
     return np.array([a.GetAtomicNum() for a in mol.GetAtoms()], dtype=np.int32)
 
 
-def assign_atomic_rich_Properties(mol):
-    from rdkit.Chem import rdMolDescriptors, EState, rdPartialCharges
-
-    for (i, x) in enumerate(rdMolDescriptors._CalcCrippenContribs(mol)):
-        mol.GetAtomWithIdx(i).SetDoubleProp('crippen_logp', x[0])
-        mol.GetAtomWithIdx(i).SetDoubleProp('crippen_mr', x[1])
-    for (i, x) in enumerate(rdMolDescriptors._CalcTPSAContribs(mol)):
-        mol.GetAtomWithIdx(i).SetDoubleProp('tpsa', x)
-    for (i, x) in enumerate(rdMolDescriptors._CalcLabuteASAContribs(mol)[0]):
-        mol.GetAtomWithIdx(i).SetDoubleProp('asa', x)
-    for (i, x) in enumerate(EState.EStateIndices(mol)):
-        mol.GetAtomWithIdx(i).SetDoubleProp('estate', x)
-    rdPartialCharges.ComputeGasteigerCharges(mol)
-
-
 def construct_atom_feature_matrix(mol, whether_rich=True):
     atom_simple_features = [list(map(lambda s: a.GetAtomicNum() == s, list(range(MAX_ATOMIC_NUM)))) + \
                             list(map(lambda s: a.GetDegree() == s, [0, 1, 2, 3, 4, 5])) + \
@@ -34,7 +19,6 @@ def construct_atom_feature_matrix(mol, whether_rich=True):
     if not whether_rich:
         return atom_simple_features
 
-    assign_atomic_rich_Properties(mol)
     atom_rich_features = [
         [a.GetIsAromatic() == False and any([neighbor.GetIsAromatic() for neighbor in a.GetNeighbors()])] + \
         [a.IsInRing()] + \
@@ -43,11 +27,8 @@ def construct_atom_feature_matrix(mol, whether_rich=True):
         [a.GetAtomicNum() in [7, 15, 33, 51, 83]] + \
         [a.GetAtomicNum() in [3, 11, 19, 37, 55, 87]] + \
         [a.GetAtomicNum() in [4, 12, 20, 38, 56, 88]] + \
-        [a.GetAtomicNum() in [13, 22, 24, 25, 26, 27, 28, 29, 30, 33, 42, 44, 45, 46, 47, 48, 49, 50, 78, 80, 82]] + \
-        [a.GetDoubleProp('crippen_logp'), a.GetDoubleProp('crippen_mr'),
-         a.GetDoubleProp('tpsa'),
-         a.GetDoubleProp('asa'), a.GetDoubleProp('estate'),
-         a.GetDoubleProp('_GasteigerCharge'), a.GetDoubleProp('_GasteigerHCharge')] for a in mol.GetAtoms()]
+        [a.GetAtomicNum() in [13, 22, 24, 25, 26, 27, 28, 29, 30, 33, 42, 44, 45, 46, 47, 48, 49, 50, 78, 80, 82]] \
+        for a in mol.GetAtoms()]
     atom_rich_features = np.array(atom_rich_features, dtype=np.float32)
 
     return np.concatenate((atom_simple_features, atom_rich_features), axis=1)
@@ -96,7 +77,7 @@ def constrcut_atom_MapNum_Num_list(mol):
     return MapNum_Num
 
 
-# TODO: 好像不对
+# TODO: 好像不对: keep的1更多，change的1很少，导致inference的时候基本都是keep，但是只保留一个的话就必须要threshod或者top-10
 def construct_sigmoid_label(mol, adjs, actions):
     '''
     - reactants: [CH3:14][NH2:15].[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[Cl:13].[OH2:16]
@@ -163,9 +144,7 @@ def construct_softmax_label(mol, adjs, actions):
         s_label[1, i, j] = 1
         s_label[1, j, i] = 1
 
+    mask = np.triu(np.ones((2, size, size)).astype(np.int32), 1) - 1
+    s_label = np.triu(s_label, 1) + mask
+
     return s_label
-
-
-if __name__ == '__main__':
-    s = '[CH3:14][NH2:15].[N+:1](=[O:2])([O-:3])[c:4]1[cH:5][c:6]([C:7](=[O:8])[OH:9])[cH:10][cH:11][c:12]1[Cl:13].[OH2:16]'
-    m = Chem.MolFromSmiles(s)

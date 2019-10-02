@@ -6,7 +6,6 @@ from chainer.training import extensions, StandardUpdater
 
 import chainermn
 
-import random
 import logging
 import argparse
 from distutils.util import strtobool
@@ -14,14 +13,18 @@ from distutils.util import strtobool
 from model import pair_matrix_model
 import uspto_pre
 from updater import MyUpdater
+from evaluator import MyEvaluator
 
+from rdkit import RDLogger
+rdl = RDLogger.logger()
+rdl.setLevel(RDLogger.CRITICAL)
 
 def main():
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--epoch', type=int, default=10)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--gpu', action='store_true')
     parser.add_argument('--out', default='result_debug')
     parser.add_argument('--frequency', type=int, default=-1)
@@ -33,11 +36,10 @@ def main():
     parser.add_argument('--valid_path', default='../test.txt.proc')
     parser.add_argument('--communicator', type=str, default='pure_nccl')
     parser.add_argument('--type', default='debug')
-    parser.add_argument('--label_type', default='softmax')
+    parser.add_argument('--rich', type=strtobool, default='false')
 
     args = parser.parse_args()
 
-    assert args.label_type in ['sigmoid', 'softmax']
     assert args.type in ['debug', 'all']
 
     if args.gpu:
@@ -59,8 +61,7 @@ def main():
         print('Num epoch: {}'.format(args.epoch))
         print('==========================================')
 
-    model = pair_matrix_model(label_type=args.label_type,
-                              gnn_dim=args.gnn_dim, n_layers=args.n_layers, nn_dim=args.nn_dim)
+    model = pair_matrix_model(gnn_dim=args.gnn_dim, n_layers=args.n_layers, nn_dim=args.nn_dim)
     if device > 0:
         chainer.cuda.get_device_from_id(device).use()
         model.to_gpu()
@@ -74,11 +75,11 @@ def main():
 
     if comm.rank == 0:
         if args.type == 'debug':
-            train_dataset = uspto_pre.USPTO_pre(train_raw[:100], args.label_type)
-            valid_dataset = uspto_pre.USPTO_pre(valid_raw[:40], args.label_type)
+            train_dataset = uspto_pre.USPTO_pre(train_raw[:100], args.rich)
+            valid_dataset = uspto_pre.USPTO_pre(valid_raw[:40], args.rich)
         elif args.type == 'all':
-            train_dataset = uspto_pre.USPTO_pre(train_raw, args.label_type)
-            valid_dataset = uspto_pre.USPTO_pre(valid_raw, args.label_type)
+            train_dataset = uspto_pre.USPTO_pre(train_raw, args.rich)
+            valid_dataset = uspto_pre.USPTO_pre(valid_raw, args.rich)
     else:
         train_dataset, valid_dataset = None, None
 
@@ -88,11 +89,11 @@ def main():
     train_iter = SerialIterator(train_dataset, args.batch_size)
     valid_iter = SerialIterator(valid_dataset, args.batch_size, repeat=False, shuffle=False)
 
-    updater = MyUpdater(models=model, iterator=train_iter,
-                        optimizer=optimizer, device=device, converter=concat_mols)
+    updater = MyUpdater(iterator=train_iter, optimizer=optimizer, device=device, converter=concat_mols)
     trainer = training.Trainer(updater, (args.epoch, 'epoch'), out=args.out)
-    # TODO: MyEvaluator
-    trainer.extend(extensions.Evaluator(valid_iter, model, device=device, converter=concat_mols))
+
+    evaluator = MyEvaluator(iterator=valid_iter, target=model, device=device, converter=concat_mols)
+    trainer.extend(evaluator)
 
     trainer.extend(extensions.observe_value('alpha', lambda t: optimizer.alpha))
     trainer.extend(extensions.ExponentialShift('alpha', 0.9, optimizer=optimizer),
@@ -100,7 +101,7 @@ def main():
 
     if comm.rank == 0:
         frequency = args.epoch if args.frequency == -1 else max(1, args.frequency)
-        trainer.extend(extensions.snapshot_object(model, args.label_type + 'snapshot_{.updater.iteration}'),
+        trainer.extend(extensions.snapshot_object(model, 'snapshot_{.updater.iteration}'),
                        trigger=(frequency, 'epoch'))
 
         trainer.extend(extensions.LogReport())
@@ -108,13 +109,13 @@ def main():
         trainer.extend(extensions.PrintReport(
             ['epoch', 'alpha',
              'main/loss', 'validation/main/loss',
-             'main/acc', 'validation/main/acc',
+             # 'main/acc', 'validation/main/acc',
              'elapsed_time']
         ))
-        trainer.extend(extensions.PlotReport(
-            ['main/acc', 'validation/main/acc'],
-            'epoch', file_name='acc.png'
-        ))
+        # trainer.extend(extensions.PlotReport(
+        #     ['main/acc', 'validation/main/acc'],
+        #     'epoch', file_name='acc.png'
+        # ))
         trainer.extend(extensions.PlotReport(
             ['main/loss', 'validation/main/loss'],
             'epoch', file_name='loss.png'
@@ -126,3 +127,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    import numpy as np
+
+    np.triu(np.ones((16, 16)), 1)
