@@ -22,26 +22,26 @@ class pair_matrix_model(chainer.Chain):
         h = h.reshape(batch_size, 1, -1, hidden_size) + h.reshape(batch_size, -1, 1, hidden_size)
         h = h.reshape(batch_size, -1, hidden_size)
         h1 = self.nn1(h)
-        h2 = self.nn2(h)
+        # h2 = self.nn2(h)
         # return h, h1, h2
 
         l1 = label[:, 0, :, :].reshape(-1, )
         h1 = h1.reshape(-1, 5)
         loss1 = functions.softmax_cross_entropy(h1, l1, ignore_label=-1)
 
-        l2 = label[:, 1, :, :].reshape(-1, )
-        h2 = h2.reshape(-1, 2)
-        loss2 = functions.softmax_cross_entropy(h2, l2, ignore_label=-1)
+        # l2 = label[:, 1, :, :].reshape(-1, )
+        # h2 = h2.reshape(-1, 2)
+        # loss2 = functions.softmax_cross_entropy(h2, l2, ignore_label=-1)
 
-        loss = loss1 / 2 + loss2 / 2
+        # loss = loss1 / 2 + loss2 / 2
 
         # TODO: acc 写在inference里面，难度较大
 
         reporter.report({
-            'loss': loss,
+            'loss': loss1,
         }, self)
 
-        return loss
+        return loss1
 
 
 if __name__ == '__main__':
