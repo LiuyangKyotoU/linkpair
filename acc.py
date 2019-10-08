@@ -182,5 +182,5 @@ if __name__ == '__main__':
 
     if args.mode == 'loss1':
         loss1_acc(valid_raw, args.out)
-    elif args.mode == 'loss2':
+    elif args.mode == 'loss12':
         loss2_acc(valid_raw, args.out, 'inf_loss2.txt')

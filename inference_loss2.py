@@ -83,6 +83,7 @@ def inference():
             h = model.ggnn_gwm(in_arrays[0], in_arrays[1], in_arrays[2])
 
             ind = in_arrays[4]
+            adj = in_arrays[1][:, :4, :, :]
 
             batch_size = h.shape[0]
             graph_size = h.shape[1]
@@ -98,6 +99,8 @@ def inference():
                 action_pred = []
                 for i in range(graph_size):
                     for j in range(i + 1, graph_size):
+                        if adj[x, 0, i, j] == -1:
+                            break
                         if h2[x, i, j, 1].data > h2[x, i, j, 0].data:
                             action_pred.append(str(i) + '-' + str(j))
                 with open(args.out + 'inf_' + args.snapshot + '.txt', 'a') as file:
