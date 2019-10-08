@@ -141,6 +141,8 @@ def loss2_acc(valid_raw, out1, out2):
             for p in pred_bt:
                 if int(p.split('-')[0]) in ignore or int(p.split('-')[1]) in ignore:
                     continue
+                elif pred_kc_consider == []:
+                    pred_kc_bt_consider.append(p)
                 elif p.split('-')[0] + '-' + p.split('-')[1] in inf_kc[i]:
                     pred_kc_bt_consider.append(p)
 
