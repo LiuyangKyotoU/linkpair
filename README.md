@@ -1,3 +1,3 @@
 # linkpair
 
-Continue link prediction for Chemical Synthesis pairs
+Link prediction for Chemical Synthesis pairs
